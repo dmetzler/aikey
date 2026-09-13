@@ -79,12 +79,10 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
-# Launching the .app runs `serve`; the bare binary keeps its CLI.
-cat > "$APP/Contents/MacOS/launch" <<'LAUNCH'
-#!/bin/sh
-exec "$(dirname "$0")/aikey" serve "$@"
-LAUNCH
-chmod +x "$APP/Contents/MacOS/launch"
+# No wrapper script: CFBundleExecutable must name the real binary, and the
+# binary itself defaults to `serve` when it detects it is running from a bundle.
+# (An earlier version shipped a `launch` wrapper that Finder never called, so a
+# double-click just printed usage to a stderr nobody could see.)
 
 if [[ -n "${SIGN_ID:-}" ]]; then
   echo "==> signing as $SIGN_ID"
@@ -105,6 +103,9 @@ echo
 echo "Install:   cp -R $APP /Applications/"
 echo "Run:       open $APP"
 echo "CLI:       $APP/Contents/MacOS/aikey status"
+echo
+echo "First run needs configuration:"
+echo "  $APP/Contents/MacOS/aikey init"
 echo
 echo "Unsigned builds: macOS will warn on first launch."
 echo "Right-click the app and choose Open, or: xattr -dr com.apple.quarantine $APP"

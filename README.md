@@ -103,6 +103,15 @@ python3 packaging/macos/make_icon.py --out packaging/macos/aikey.icns --png /tmp
 
 **Must run on macOS**: the tray needs cgo, which does not cross-compile from Linux.
 
+Double-clicking the app runs `serve`. The first launch needs configuration; if
+there is none, aikey shows a dialog telling you to run `init`, because inside a
+bundle stderr goes nowhere and the app would otherwise open and do nothing.
+
+```sh
+/Applications/aikey.app/Contents/MacOS/aikey init    # first run
+./packaging/macos/bundle_test.sh dist/aikey.app      # sanity-check a build
+```
+
 ## Validate it works
 
 ```sh
@@ -179,9 +188,10 @@ Known gaps, honestly:
   access token are the one path still untested.
 - **The tray is only exercised by hand.** `internal/tray` has no automated tests; a
   broken menu would not fail CI.
-- **The .app bundle has never been built or launched by its author.** It was written
-  and reviewed on Linux; the icns is structurally verified, but Gatekeeper behaviour,
-  the menu bar rendering and `open -a` autostart were confirmed only by the user.
+- **The .app bundle is validated on Linux only.** The icns is structurally verified and
+  the argument handling is unit-tested, but Gatekeeper behaviour, menu bar rendering and
+  `open -a` autostart are confirmed only by running it. `bundle_test.sh` checks the
+  bundle contract on macOS after a build.
 - No tray icon, no web UI, no spend display.
 - Refresh is lazy (on request), so the first call after a long idle pays the latency.
 - Spend must be read from the proxy, never recomputed locally.

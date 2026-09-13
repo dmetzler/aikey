@@ -7,9 +7,13 @@ package main
 import (
 	"bufio"
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -37,17 +41,92 @@ overrides: AIKEY_ISSUER, AIKEY_CLIENT_ID, AIKEY_UPSTREAM, AIKEY_LISTEN,
 AIKEY_PROFILE, AIKEY_CONFIG.
 `
 
+// runningInBundle reports whether this binary sits inside a macOS .app.
+//
+// Finder launches CFBundleExecutable with no arguments, so a bundled launch
+// must default to `serve`; a bare CLI invocation should still print usage.
+func runningInBundle() bool {
+	if runtime.GOOS != "darwin" {
+		return false
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return false
+	}
+	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
+		exe = resolved
+	}
+	dir := filepath.Dir(exe)
+	if filepath.Base(dir) != "MacOS" {
+		return false
+	}
+	return filepath.Ext(filepath.Dir(filepath.Dir(dir))) == ".app"
+}
+
+// resolveArgs decides what command to run. Returns ok=false when usage should
+// be printed instead.
+//
+// Finder launches the bundle executable with no arguments (plus a -psn_ flag on
+// older systems), so inside a bundle "no arguments" means serve, not usage.
+func resolveArgs(raw []string, inBundle bool) ([]string, bool) {
+	args := raw
+	if len(args) > 0 && strings.HasPrefix(args[0], "-psn_") {
+		args = args[1:]
+	}
+	if len(args) == 0 {
+		if !inBundle {
+			return nil, false
+		}
+		return []string{"serve"}, true
+	}
+	return args, true
+}
+
+// reportGUIError surfaces a fatal error when there is no console to print to.
+// Inside a bundle stderr goes nowhere, so an unconfigured app would simply
+// fail to appear with no explanation.
+func reportGUIError(err error) {
+	if !runningInBundle() {
+		return
+	}
+	msg := err.Error()
+	if errors.Is(err, config.ErrNoConfig) {
+		msg = "aikey is not configured yet.\n\n" +
+			"Open Terminal and run:\n    " + cliHint() + " init\n\n" +
+			"aikey ships no default endpoints, so it needs your Keycloak and " +
+			"proxy URLs before it can start."
+	}
+	script := fmt.Sprintf(
+		`display dialog %q with title "aikey" buttons {"OK"} default button "OK" with icon caution`,
+		msg)
+	_ = exec.Command("/usr/bin/osascript", "-e", script).Run()
+}
+
+// cliHint returns the path to use when telling the user to run the CLI.
+func cliHint() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return "aikey"
+	}
+	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
+		exe = resolved
+	}
+	return exe
+}
+
 func main() {
-	if len(os.Args) < 2 {
+	args, ok := resolveArgs(os.Args[1:], runningInBundle())
+	if !ok {
 		fmt.Print(usage)
 		os.Exit(2)
 	}
-	cmd := os.Args[1]
+
+	cmd := args[0]
 	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
 	profile := fs.String("profile", "", "profile name")
 	device := fs.Bool("device", false, "use the device flow (no local browser)")
 	noTray := fs.Bool("no-tray", false, "run without the system tray icon")
-	_ = fs.Parse(os.Args[2:])
+	_ = fs.Parse(args[1:])
 
 	var err error
 	switch cmd {
@@ -75,6 +154,7 @@ func main() {
 
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error: "+err.Error())
+		reportGUIError(err)
 		os.Exit(1)
 	}
 }

@@ -9,6 +9,7 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -134,6 +135,10 @@ func (c *Config) Resolve(name string) (*Profile, string, error) {
 	return p, name, nil
 }
 
+// ErrNoConfig means the profile has no endpoints yet: the expected first-run
+// state, not a corrupt file. Callers match it to show a friendlier message.
+var ErrNoConfig = errors.New("missing required setting(s)")
+
 // Validate enforces that the endpoints were actually supplied. The error text
 // points at `aikey init` because an empty config is the expected first-run
 // state, not a corruption.
@@ -149,11 +154,10 @@ func (p *Profile) Validate() error {
 		missing = append(missing, "upstream")
 	}
 	if len(missing) > 0 {
-		return fmt.Errorf(
-			"missing required setting(s): %s\n\nRun `aikey init` to configure, "+
-				"or set AIKEY_ISSUER / AIKEY_CLIENT_ID / AIKEY_UPSTREAM.\n"+
-				"aikey ships no default endpoints on purpose.",
-			strings.Join(missing, ", "))
+		return fmt.Errorf("%w: %s\n\nRun `aikey init` to configure, "+
+			"or set AIKEY_ISSUER / AIKEY_CLIENT_ID / AIKEY_UPSTREAM.\n"+
+			"aikey ships no default endpoints on purpose.",
+			ErrNoConfig, strings.Join(missing, ", "))
 	}
 	if !strings.HasPrefix(p.Issuer, "https://") && !strings.HasPrefix(p.Issuer, "http://") {
 		return fmt.Errorf("issuer must be an absolute URL, got %q", p.Issuer)
