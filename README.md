@@ -11,7 +11,9 @@ next refresh. A static API key would keep working forever.
 
 ## Status
 
-Spike. The core works and is tested, but this is not a finished product — see
+Spike, and the spike succeeded: validated end to end against a live LiteLLM +
+Keycloak deployment (plain completion, genuinely incremental streaming, and a
+Strands agent driving it unmodified). Still not a finished product — see
 [Limitations](#limitations).
 
 ## No default endpoints, on purpose
@@ -116,9 +118,11 @@ Known gaps, honestly:
 
 - **Tokens are stored in a `0600` file, not the OS keyring.** Keyring support needs cgo
   and platform libraries; that was out of scope for a spike.
-- **Streaming is not proven by the test suite.** The streaming tests pass even when
-  flushing is deliberately broken, so they assert behaviour but do not guard it.
-  Verify against a live upstream before trusting it.
+- **Streaming works but is not guarded by the test suite.** Verified by hand against a
+  live upstream (46 chunks spread over 0.18s). The Go streaming tests still pass when
+  flushing is deliberately broken, so they document intent rather than protect it.
+- **A refresh has never been exercised mid-stream.** Long generations that outlive the
+  access token are the one path still untested.
 - No tray icon, no web UI, no spend display.
 - Refresh is lazy (on request), so the first call after a long idle pays the latency.
 - Spend must be read from the proxy, never recomputed locally.
