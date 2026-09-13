@@ -49,6 +49,35 @@ aikey status
 curl -s http://127.0.0.1:4001/_aikey/health
 ```
 
+## Tray, settings page, autostart
+
+Running `aikey serve` on a desktop shows a tray icon: session state, log in / out,
+**Settings…**, and a **Start at login** checkbox that is off until you tick it.
+
+The settings page lives at `http://127.0.0.1:4001/_aikey/` — endpoints, session,
+and autostart, no token ever rendered. Paths under `/_aikey/` are served locally
+and never forwarded upstream.
+
+```sh
+aikey serve --no-tray            # headless / server use
+aikey autostart status           # shows the exact file it would write
+aikey autostart enable
+```
+
+Autostart is never enabled implicitly. It writes a LaunchAgent plist on macOS, an
+XDG `.desktop` file on Linux, or an `HKCU\...\Run` value on Windows; `autostart
+status` prints the exact target first.
+
+### Building without a GUI
+
+One binary, two build modes. The tray needs cgo and a desktop session, which a
+container or server does not have:
+
+```sh
+go build -o aikey ./cmd/aikey                  # with tray (build on the target OS)
+go build -tags headless -o aikey ./cmd/aikey   # no cgo, cross-compiles anywhere
+```
+
 ## Validate it works
 
 ```sh
@@ -123,6 +152,8 @@ Known gaps, honestly:
   flushing is deliberately broken, so they document intent rather than protect it.
 - **A refresh has never been exercised mid-stream.** Long generations that outlive the
   access token are the one path still untested.
+- **The tray is only exercised by hand.** `internal/tray` has no automated tests; a
+  broken menu would not fail CI.
 - No tray icon, no web UI, no spend display.
 - Refresh is lazy (on request), so the first call after a long idle pays the latency.
 - Spend must be read from the proxy, never recomputed locally.

@@ -77,6 +77,26 @@ func (ts *TokenSource) Token(ctx context.Context) (string, error) {
 	return nt.AccessToken, nil
 }
 
+// Set replaces the live token after an interactive login, so a login started
+// from the tray or web UI takes effect without restarting the proxy.
+func (ts *TokenSource) Set(t *oidc.Token) error {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	ts.tok = t
+	return ts.store.Save(t)
+}
+
+// Clear forgets the token, in memory and on disk.
+func (ts *TokenSource) Clear() error {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	ts.tok = nil
+	return ts.store.Delete()
+}
+
+// Backend reports where the token is stored, for display.
+func (ts *TokenSource) Backend() string { return string(ts.store.Backend()) }
+
 // Expiry reports the current token expiry, for `aikey status`.
 func (ts *TokenSource) Expiry() (time.Time, bool) {
 	ts.mu.Lock()
@@ -92,7 +112,18 @@ type Server struct {
 	listen string
 	proxy  *httputil.ReverseProxy
 	ts     *TokenSource
+	// ui, when set, handles the /_aikey/ settings routes. It is an
+	// http.Handler rather than a concrete type so the proxy does not depend on
+	// the web UI package.
+	ui http.Handler
 }
+
+// SetUI mounts the settings UI under /_aikey/. Paths under that prefix are
+// never forwarded upstream.
+func (s *Server) SetUI(h http.Handler) { s.ui = h }
+
+// Addr reports the listen address.
+func (s *Server) Addr() string { return s.listen }
 
 // New builds the reverse proxy for upstream.
 func New(listen, upstream string, ts *TokenSource) (*Server, error) {
@@ -158,6 +189,18 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		fmt.Fprintf(w, `{"status":"ok","expires_at":%q,"expires_in_seconds":%d}`+"\n",
 			exp.Format(time.RFC3339), int(time.Until(exp).Seconds()))
+		return
+	}
+
+	// Everything under /_aikey/ is local UI, never proxied. Checked before
+	// token acquisition so the settings page still loads when logged out --
+	// that is precisely when you need it.
+	if strings.HasPrefix(r.URL.Path, "/_aikey/") {
+		if s.ui == nil {
+			http.NotFound(w, r)
+			return
+		}
+		s.ui.ServeHTTP(w, r)
 		return
 	}
 

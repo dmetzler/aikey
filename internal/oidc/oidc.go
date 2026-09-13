@@ -306,6 +306,9 @@ func PollDevice(ctx context.Context, ep *Endpoints, clientID string, dc *DeviceC
 	return nil, fmt.Errorf("device code expired before approval")
 }
 
+// OpenBrowser opens a URL in the user's default browser.
+func OpenBrowser(u string) error { return openBrowser(u) }
+
 func openBrowser(u string) error {
 	switch runtime.GOOS {
 	case "darwin":
