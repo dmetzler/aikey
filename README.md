@@ -47,6 +47,16 @@ aikey status
 curl -s http://127.0.0.1:4001/_aikey/health
 ```
 
+## Validate it works
+
+```sh
+pip install 'strands-agents[openai]'        # optional; the script skips it if absent
+python3 examples/check_aikey.py --model gpt-4o-mini
+```
+
+It checks the session, a plain completion, a **streaming** completion (timing the
+chunks to tell real streaming from buffering), and a Strands agent.
+
 ## Profiles
 
 Several deployments from one install:
