@@ -36,6 +36,28 @@ func TestStatusDefaultsToDisabled(t *testing.T) {
 	}
 }
 
+// A LaunchAgent must point at the .app, not the binary buried inside it.
+func TestBundlePathDetection(t *testing.T) {
+	cases := []struct {
+		exe     string
+		wantApp string
+		wantOK  bool
+	}{
+		{"/Applications/aikey.app/Contents/MacOS/aikey", "/Applications/aikey.app", true},
+		{"/usr/local/bin/aikey", "", false},
+		{"/tmp/aikey", "", false},
+		{"/Applications/aikey.app/Contents/Helpers/aikey", "", false},
+		{"/Applications/notanapp/Contents/MacOS/aikey", "", false},
+	}
+	for _, c := range cases {
+		app, ok := bundlePath(c.exe)
+		if ok != c.wantOK || app != c.wantApp {
+			t.Errorf("bundlePath(%q) = (%q,%v), want (%q,%v)",
+				c.exe, app, ok, c.wantApp, c.wantOK)
+		}
+	}
+}
+
 func TestXMLEscape(t *testing.T) {
 	got := xmlEscape(`a&b<c>"d"`)
 	want := "a&amp;b&lt;c&gt;&quot;d&quot;"

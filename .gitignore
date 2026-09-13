@@ -1,3 +1,5 @@
+*.app
+*.tmp
 /aikey
 /dist/
-*.tmp
+dist/

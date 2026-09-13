@@ -143,6 +143,27 @@ func plistPath() (string, error) {
 	return filepath.Join(home, "Library", "LaunchAgents", label+".plist"), nil
 }
 
+// bundlePath returns the enclosing .app when exe lives inside one.
+//
+// A LaunchAgent pointing at Contents/MacOS/aikey starts the binary outside its
+// bundle: macOS then treats it as an anonymous process, and the menu bar icon
+// loses the app identity (and its icon). Registering the bundle keeps it whole.
+func bundlePath(exe string) (string, bool) {
+	dir := filepath.Dir(exe) // .../Foo.app/Contents/MacOS
+	if filepath.Base(dir) != "MacOS" {
+		return "", false
+	}
+	contents := filepath.Dir(dir)
+	if filepath.Base(contents) != "Contents" {
+		return "", false
+	}
+	app := filepath.Dir(contents)
+	if filepath.Ext(app) != ".app" {
+		return "", false
+	}
+	return app, true
+}
+
 func enableDarwin(exe, profile string) error {
 	p, err := plistPath()
 	if err != nil {
@@ -152,7 +173,11 @@ func enableDarwin(exe, profile string) error {
 		return err
 	}
 
+	// Prefer `open -a Bundle.app` so the agent keeps its bundle identity.
 	args := []string{exe, "serve"}
+	if app, ok := bundlePath(exe); ok {
+		args = []string{"/usr/bin/open", "-a", app, "--args", "serve"}
+	}
 	if profile != "" {
 		args = append(args, "--profile", profile)
 	}
